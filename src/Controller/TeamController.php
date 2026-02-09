@@ -2,25 +2,25 @@
 
 namespace App\Controller;
 
-use App\Application\Dto\__TEMPLATE_NAME__\Create__TEMPLATE_NAME__Dto;
-use App\Application\Dto\__TEMPLATE_NAME__\Update__TEMPLATE_NAME__Dto;
+use App\Application\Dto\Team\CreateTeamDto;
+use App\Application\Dto\Team\UpdateTeamDto;
 use App\Application\Dto\Common\BasePaginateDto;
 use App\Application\Dto\Common\IdDto;
-use App\Application\Services\__TEMPLATE_NAME__Service;
-use App\Application\Transformers\__TEMPLATE_NAME__Transformer;
+use App\Application\Services\TeamService;
+use App\Application\Transformers\TeamTransformer;
 use App\Controller\BaseController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
-#[Route('/__TEMPLATE_NAME_IN_PLURAL__')]
-class __TEMPLATE_NAME__Controller extends BaseController
+#[Route('/teams')]
+class TeamController extends BaseController
 {
   public function __construct(
-    __TEMPLATE_NAME__Service $service,
+    TeamService $service,
     ValidatorInterface $validator,
-    __TEMPLATE_NAME__Transformer $transformer,
+    TeamTransformer $transformer,
   ) {
     parent::__construct($validator, $service, $transformer);
   }
@@ -40,13 +40,13 @@ class __TEMPLATE_NAME__Controller extends BaseController
   #[Route('', methods: ['POST'])]
   public function create(Request $request): JsonResponse
   {
-    return parent::baseCreate($request, Create__TEMPLATE_NAME__Dto::class);
+    return parent::baseCreate($request, CreateTeamDto::class);
   }
 
   #[Route('/{id}', methods: ['PUT'])]
   public function update(string $id, Request $request): JsonResponse
   {
-    return parent::baseUpdate($id, $request, Update__TEMPLATE_NAME__Dto::class);
+    return parent::baseUpdate($id, $request, UpdateTeamDto::class);
   }
 
 

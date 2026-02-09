@@ -99,6 +99,26 @@ abstract class BaseController extends AbstractController
     });
   }
 
+  protected function baseInactivate(string $id, Request $request, string $dtoClass): JsonResponse
+  {
+    return $this->handleRequest(function() use ($id, $request, $dtoClass) {
+      $dto = $this->dtoFromRequest($request, $dtoClass, $id);
+      $entity = $this->service->inactivate($dto);
+
+      return new JsonResponse($this->baseTransformer->transform($entity), 200);
+    });
+  }
+
+  protected function baseReactivate(string $id, Request $request, string $dtoClass): JsonResponse
+  {
+    return $this->handleRequest(function() use ($id, $request, $dtoClass) {
+      $dto = $this->dtoFromRequest($request, $dtoClass, $id);
+      $entity = $this->service->reactivate($dto);
+
+      return new JsonResponse($this->baseTransformer->transform($entity), 200);
+    });
+  }
+
 
   protected function dtoFromRequest(Request $request, string $dtoClass, $id = null): object
   {

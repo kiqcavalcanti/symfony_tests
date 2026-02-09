@@ -4,6 +4,7 @@ namespace App\Application\Services;
 
 use App\Application\Dto\Common\BaseDto;
 use App\Entity\BaseEntity;
+use App\Entity\Traits\SoftDeletableTrait;
 use App\Exceptions\EntityNotFoundException;
 use App\Exceptions\UnprocessableEntityException;
 use Doctrine\ORM\EntityManagerInterface;
@@ -61,6 +62,42 @@ abstract class BaseService
 
     $this->em->remove($entity);
     $this->em->flush();
+  }
+
+  public function baseInactivate(BaseDto $dto): object
+  {
+    $entity = $this->findOrFail($dto->id);
+
+    if (!$this->supportsSoftDelete($entity)) {
+      throw new UnprocessableEntityException([
+        'message' => 'Entidade não suporta inativação',
+      ]);
+    }
+
+    if (!$entity->isDeleted()) {
+      $entity->softDelete();
+      $this->em->flush();
+    }
+
+    return $entity;
+  }
+
+  public function baseReactivate(BaseDto $dto): object
+  {
+    $entity = $this->findOrFail($dto->id);
+
+    if (!$this->supportsSoftDelete($entity)) {
+      throw new UnprocessableEntityException([
+        'message' => 'Entidade não suporta reativação',
+      ]);
+    }
+
+    if ($entity->isDeleted()) {
+      $entity->restore();
+      $this->em->flush();
+    }
+
+    return $entity;
   }
 
   public function baseShow(BaseDto $dto): ?object
@@ -147,6 +184,13 @@ abstract class BaseService
         );
       }
     }
+  }
+
+  protected function supportsSoftDelete(object $entity): bool
+  {
+    $traits = class_uses($entity, true);
+
+    return isset($traits[SoftDeletableTrait::class]);
   }
 
 }

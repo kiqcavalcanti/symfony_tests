@@ -72,11 +72,8 @@ class MakeFeatureCommand extends Command
       $typeIndex = $io->choice(
         'Tipo do campo',
         array_keys(self::TYPES_MAP),
-        0  // Sempre padrão para string (índice 0)
+        'string'
       );
-
-      // Converte de volta para a chave se necessário
-      $typeChoice = array_keys(self::TYPES_MAP)[is_numeric($typeIndex) ? $typeIndex : array_search($typeIndex, array_keys(self::TYPES_MAP), true)];
 
       $nullable = $io->confirm('Pode ser nulo?', false);
 
@@ -86,13 +83,13 @@ class MakeFeatureCommand extends Command
       // Armazena os dados estruturados
       $fieldInputs[] = [
         'name' => $fieldName,
-        'type' => $typeChoice,
-        'doctrineType' => self::TYPES_MAP[$typeChoice],
+        'type' => $typeIndex,
+        'doctrineType' => self::TYPES_MAP[$typeIndex],
         'nullable' => $nullable,
         'unique' => $unique,
       ];
 
-      $io->writeln("<comment>✓ Campo '{$fieldName}' ({$typeChoice})" . ($nullable ? ', nullable' : '') . " adicionado</comment>");
+      $io->writeln("<comment>✓ Campo '{$fieldName}' ({$typeIndex})" . ($nullable ? ', nullable' : '') . " adicionado</comment>");
       $io->writeln('');
     }
 
@@ -120,6 +117,15 @@ class MakeFeatureCommand extends Command
 
     $io->writeln('');
 
+    // Seção de funcionalidades adicionais
+    $io->section('Funcionalidades Adicionais');
+
+    $useSoftDelete = $io->confirm('Deseja adicionar SoftDelete (exclusão lógica)?', false);
+    $useTimestamps = $io->confirm('Deseja adicionar Timestamps (created_at e updated_at)?', false);
+
+    $io->writeln('');
+
+
     if (!$io->confirm('Deseja prosseguir com a criação da entidade?', true)) {
       $io->warning('Operação cancelada pelo usuário');
       return Command::SUCCESS;
@@ -136,7 +142,7 @@ class MakeFeatureCommand extends Command
     }
 
     // Pós-processamento: garante que a entidade extenda BaseEntity
-    $this->ensureEntityExtendsBase($entityName, $io);
+    $this->ensureEntityExtendsBase($entityName, $io, $useSoftDelete, $useTimestamps);
 
     // Adiciona método getUniqueFields na entidade, se necessário
     $uniqueFields = array_values(array_filter(array_map(function($f){ return !empty($f['unique']) ? $f['name'] : null; }, $fieldInputs)));
@@ -283,7 +289,7 @@ class MakeFeatureCommand extends Command
   /**
    * Garante que a entidade extenda BaseEntity e adiciona o use se necessário
    */
-  private function ensureEntityExtendsBase(string $entityName, SymfonyStyle $io): void
+  private function ensureEntityExtendsBase(string $entityName, SymfonyStyle $io, bool $useSoftDelete = false, bool $useTimestamps = false): void
   {
     $projectRoot = dirname(__DIR__, 2);
     $entityPath = $projectRoot . '/src/Entity/' . $entityName . '.php';
@@ -294,39 +300,87 @@ class MakeFeatureCommand extends Command
     }
 
     $content = file_get_contents($entityPath);
+    $modified = false;
 
     // Se já estende BaseEntity, nada a fazer
-    if (stripos($content, 'extends BaseEntity') !== false) {
+    if (stripos($content, 'extends BaseEntity') === false) {
+      // Adiciona use App\Entity\BaseEntity; se não existir
+      $useLine = "use App\\Entity\\BaseEntity;";
+      if (strpos($content, $useLine) === false) {
+        // Tenta inserir após o último use; se não houver use, insere após a declaração do namespace
+        if (preg_match_all('/^use\s.+;$/m', $content, $matches, PREG_OFFSET_CAPTURE)) {
+          $last = end($matches[0]);
+          $insertPos = $last[1] + strlen($last[0]);
+          $content = substr_replace($content, "\n" . $useLine, $insertPos, 0);
+        } else {
+          // Insere após namespace
+          $ns = "namespace App\\Entity;";
+          if (strpos($content, $ns) !== false) {
+            $content = str_replace($ns, $ns . "\n" . $useLine, $content);
+          }
+        }
+      }
+
+      // Insere extends BaseEntity na declaração da classe
+      $content = preg_replace('/class\s+' . preg_quote($entityName, '/') . '(\s*)(implements\s+[^{]+)?/m', 'class ' . $entityName . ' extends BaseEntity $2', $content, 1);
+
+      $io->writeln("Atualizada entidade para estender BaseEntity: {$entityPath}");
+      $modified = true;
+    } else {
       $io->writeln("Entidade {$entityName} já estende BaseEntity");
-      return;
     }
 
-    // Adiciona use App\Entity\BaseEntity; se não existir
-    $useLine = "use App\\Entity\\BaseEntity;";
-    if (strpos($content, $useLine) === false) {
-      // Tenta inserir após o último use; se não houver use, insere após a declaração do namespace
-      if (preg_match_all('/^use\s.+;$/m', $content, $matches, PREG_OFFSET_CAPTURE)) {
-        $last = end($matches[0]);
-        $insertPos = $last[1] + strlen($last[0]);
-        $content = substr_replace($content, "\n" . $useLine, $insertPos, 0);
-      } else {
-        // Insere após namespace
-        $ns = "namespace App\\Entity;";
-        if (strpos($content, $ns) !== false) {
-          $content = str_replace($ns, $ns . "\n" . $useLine, $content);
-        } else {
-          // fallback: insert near top
-          $content = $useLine . "\n" . $content;
-        }
+    // Adiciona traits se solicitadas
+    if ($useSoftDelete) {
+      $content = $this->addTraitToEntityContent($content, 'SoftDeletableTrait', 'App\\Entity\\Traits\\SoftDeletableTrait', $io);
+      $modified = true;
+    }
+
+    if ($useTimestamps) {
+      $content = $this->addTraitToEntityContent($content, 'TimestampableTrait', 'App\\Entity\\Traits\\TimestampableTrait', $io);
+      $modified = true;
+    }
+
+    if ($modified) {
+      file_put_contents($entityPath, $content);
+    }
+  }
+
+  /**
+   * Adiciona uma trait ao conteúdo da entidade e retorna o conteúdo modificado
+   */
+  private function addTraitToEntityContent(string $content, string $traitName, string $traitNamespace, SymfonyStyle $io): string
+  {
+    // Verifica se a trait já está sendo usada
+    if (stripos($content, 'use ' . $traitName) !== false) {
+      $io->writeln("Trait {$traitName} já está sendo usada na entidade");
+      return $content;
+    }
+
+    // Adiciona use namespace statement para a trait
+    $useNamespaceLine = "use " . $traitNamespace . ";";
+
+    // Insere após os últimos use statements
+    if (preg_match_all('/^use\s.+;$/m', $content, $matches, PREG_OFFSET_CAPTURE)) {
+      $lastMatch = end($matches[0]);
+      $insertPos = $lastMatch[1] + strlen($lastMatch[0]);
+      $content = substr_replace($content, "\n" . $useNamespaceLine, $insertPos, 0);
+    } else {
+      // Fallback: insere após namespace
+      if (preg_match('/^namespace\s+[^;]+;/m', $content, $matches, PREG_OFFSET_CAPTURE)) {
+        $insertPos = $matches[0][1] + strlen($matches[0][0]);
+        $content = substr_replace($content, "\n" . $useNamespaceLine, $insertPos, 0);
       }
     }
 
-    // Insere extends BaseEntity na declaração da classe
-    $content = preg_replace('/class\s+' . preg_quote($entityName, '/') . '(\s*)(implements\s+[^{]+)?/m', 'class ' . $entityName . ' extends BaseEntity $2', $content, 1);
+    // Insere o uso da trait dentro da classe (após {)
+    if (preg_match('/class\s+\w+\s+extends\s+\w+\s*{/', $content, $matches, PREG_OFFSET_CAPTURE)) {
+      $classStart = $matches[0][1] + strlen($matches[0][0]);
+      $content = substr_replace($content, "\n    use " . $traitName . ";", $classStart, 0);
+      $io->writeln("Adicionada trait {$traitName} à entidade");
+    }
 
-    file_put_contents($entityPath, $content);
-
-    $io->writeln("Atualizada entidade para estender BaseEntity: {$entityPath}");
+    return $content;
   }
 
   // Normaliza para nome de classe PascalCase, remove caracteres inválidos
@@ -578,6 +632,46 @@ class MakeFeatureCommand extends Command
   {
     $projectRoot = dirname(__DIR__, 2);
 
+    // Verifica se há migrations pendentes ANTES de criar uma nova
+    $io->section('Verificando migrations pendentes');
+    $statusCmd = sprintf('cd %s && php bin/console doctrine:migrations:status 2>&1', escapeshellarg($projectRoot));
+    $statusOutput = shell_exec($statusCmd);
+
+    if ($statusOutput !== null && (
+        stripos($statusOutput, 'New Migrations') !== false ||
+        preg_match('/New Migrations:\s+(\d+)/i', $statusOutput, $matches)
+      )) {
+      // Extrai o número de migrations pendentes
+      if (preg_match('/New Migrations:\s+(\d+)/i', $statusOutput, $matches)) {
+        $pendingCount = (int)$matches[1];
+
+        if ($pendingCount > 0) {
+          $io->warning("Existem {$pendingCount} migration(s) pendente(s) que ainda não foram executadas.");
+          $io->writeln('Para evitar que a nova migration recrie tabelas existentes, é recomendado executar as migrations pendentes primeiro.');
+          $io->writeln('');
+
+          if ($io->confirm('Deseja executar as migrations pendentes AGORA antes de criar a nova?', true)) {
+            $io->section('Executando migrations pendentes');
+            $migrateCmd = sprintf('cd %s && php bin/console doctrine:migrations:migrate --no-interaction', escapeshellarg($projectRoot));
+            passthru($migrateCmd, $migrateCode);
+
+            if ($migrateCode !== 0) {
+              $io->error('Erro ao executar migrations pendentes. Abortando criação de nova migration.');
+              return;
+            }
+
+            $io->success('Migrations pendentes executadas com sucesso!');
+            $io->writeln('');
+          } else {
+            if (!$io->confirm('Deseja continuar mesmo assim? (A nova migration pode conter tabelas já existentes)', false)) {
+              $io->warning('Operação cancelada. Execute as migrations pendentes e tente novamente.');
+              return;
+            }
+          }
+        }
+      }
+    }
+
     $io->section('Criando migration');
     $command = sprintf('cd %s && php bin/console make:migration', escapeshellarg($projectRoot));
 
@@ -588,7 +682,7 @@ class MakeFeatureCommand extends Command
       return;
     }
 
-    if ($io->confirm('Deseja executar as migrations agora? (rodar doctrine:migrations:migrate)', false)) {
+    if ($io->confirm('Deseja executar a nova migration agora? (rodar doctrine:migrations:migrate)', false)) {
       $io->section('Executando migrations');
       $migrateCmd = sprintf('cd %s && php bin/console doctrine:migrations:migrate --no-interaction', escapeshellarg($projectRoot));
       passthru($migrateCmd, $migrateCode);

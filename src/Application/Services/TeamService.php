@@ -3,15 +3,15 @@
 namespace App\Application\Services;
 
 use App\Application\Services\BaseService;
-use App\Entity\__TEMPLATE_ENTITY__;
+use App\Entity\Team;
 use App\Entity\BaseEntity;
 use Doctrine\ORM\EntityManagerInterface;
 
-class TemplateService extends BaseService
+class TeamService extends BaseService
 {
   public function __construct(EntityManagerInterface $em)
   {
-    parent::__construct($em, __TEMPLATE_ENTITY__::class);
+    parent::__construct($em, Team::class);
   }
 
 
@@ -35,11 +35,6 @@ class TemplateService extends BaseService
     return parent::baseShow($dto);
   }
 
-  public function paginate(mixed $dto): array
-  {
-    return parent::basePaginate($dto);
-  }
-
   public function inactivate(mixed $dto): BaseEntity
   {
     return parent::baseInactivate($dto);
@@ -50,4 +45,8 @@ class TemplateService extends BaseService
     return parent::baseReactivate($dto);
   }
 
+  public function paginate(mixed $dto): array
+  {
+    return parent::basePaginate($dto);
+  }
 }

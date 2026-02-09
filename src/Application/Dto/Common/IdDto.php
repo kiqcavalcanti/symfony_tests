@@ -7,7 +7,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 class IdDto extends BaseDto
 {
   #[Assert\NotBlank]
-  #[Assert\Uuid]
+  #[Assert\Positive]
   public string $id;
 }
 

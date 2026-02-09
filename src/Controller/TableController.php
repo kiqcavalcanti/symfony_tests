@@ -2,25 +2,25 @@
 
 namespace App\Controller;
 
-use App\Application\Dto\__TEMPLATE_NAME__\Create__TEMPLATE_NAME__Dto;
-use App\Application\Dto\__TEMPLATE_NAME__\Update__TEMPLATE_NAME__Dto;
+use App\Application\Dto\Table\CreateTableDto;
+use App\Application\Dto\Table\UpdateTableDto;
 use App\Application\Dto\Common\BasePaginateDto;
 use App\Application\Dto\Common\IdDto;
-use App\Application\Services\__TEMPLATE_NAME__Service;
-use App\Application\Transformers\__TEMPLATE_NAME__Transformer;
+use App\Application\Services\TableService;
+use App\Application\Transformers\TableTransformer;
 use App\Controller\BaseController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
-#[Route('/__TEMPLATE_NAME_IN_PLURAL__')]
-class __TEMPLATE_NAME__Controller extends BaseController
+#[Route('/tables')]
+class TableController extends BaseController
 {
   public function __construct(
-    __TEMPLATE_NAME__Service $service,
+    TableService $service,
     ValidatorInterface $validator,
-    __TEMPLATE_NAME__Transformer $transformer,
+    TableTransformer $transformer,
   ) {
     parent::__construct($validator, $service, $transformer);
   }
@@ -40,13 +40,13 @@ class __TEMPLATE_NAME__Controller extends BaseController
   #[Route('', methods: ['POST'])]
   public function create(Request $request): JsonResponse
   {
-    return parent::baseCreate($request, Create__TEMPLATE_NAME__Dto::class);
+    return parent::baseCreate($request, CreateTableDto::class);
   }
 
   #[Route('/{id}', methods: ['PUT'])]
   public function update(string $id, Request $request): JsonResponse
   {
-    return parent::baseUpdate($id, $request, Update__TEMPLATE_NAME__Dto::class);
+    return parent::baseUpdate($id, $request, UpdateTableDto::class);
   }
 
 
@@ -55,17 +55,4 @@ class __TEMPLATE_NAME__Controller extends BaseController
   {
     return parent::baseDelete($id, $request, IdDto::class);
   }
-
-  #[Route('/{id}/reactivate', methods: ['POST'])]
-  public function reactivate(string $id, Request $request): JsonResponse
-  {
-    return parent::baseReactivate($id, $request, IdDto::class);
-  }
-
-  #[Route('/{id}/inactivate', methods: ['POST'])]
-  public function inactivate(string $id, Request $request): JsonResponse
-  {
-    return parent::baseInactivate($id, $request, IdDto::class);
-  }
-
 }

@@ -93,6 +93,14 @@ abstract class BaseEntity
     return lcfirst(str_replace(' ', '', ucwords(str_replace('_', ' ', $str))));
   }
 
+  private static function toSnakeCase(string $str): string
+  {
+    $str = preg_replace('/[\s\-]+/', '_', $str);
+    $str = preg_replace('/([a-z0-9])([A-Z])/', '$1_$2', $str);
+    return strtolower($str);
+  }
+
+
   /**
    * Retorna os campos únicos da entidade. Por padrão nenhum campo é único.
    */
@@ -101,7 +109,7 @@ abstract class BaseEntity
     return [];
   }
 
-  public function toArray(): array
+  public function toArray(bool $snakeCase = true): array
   {
     $result = [];
     $reflection = new \ReflectionClass($this);
@@ -119,7 +127,7 @@ abstract class BaseEntity
       $valueSet = false;
       foreach ($getterCandidates as $getter) {
         if (method_exists($this, $getter)) {
-          $result[$fieldName] = $this->$getter();
+          $result[$snakeCase ? self::toSnakeCase($fieldName) : $fieldName] = $this->$getter();
           $valueSet = true;
           break;
         }
@@ -127,7 +135,7 @@ abstract class BaseEntity
 
       // Se não encontrou getter, tenta acessar a propriedade diretamente
       if (!$valueSet) {
-        $result[$fieldName] = $property->getValue($this);
+        $result[$snakeCase ? self::toSnakeCase($fieldName) : $fieldName] = $property->getValue($this);
       }
     }
 

@@ -3,15 +3,15 @@
 namespace App\Application\Services;
 
 use App\Application\Services\BaseService;
-use App\Entity\__TEMPLATE_ENTITY__;
+use App\Entity\Console;
 use App\Entity\BaseEntity;
 use Doctrine\ORM\EntityManagerInterface;
 
-class TemplateService extends BaseService
+class ConsoleService extends BaseService
 {
   public function __construct(EntityManagerInterface $em)
   {
-    parent::__construct($em, __TEMPLATE_ENTITY__::class);
+    parent::__construct($em, Console::class);
   }
 
 
