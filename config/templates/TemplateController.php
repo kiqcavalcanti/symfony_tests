@@ -25,6 +25,21 @@ class __TEMPLATE_NAME__Controller extends BaseController
     parent::__construct($validator, $service, $transformer);
   }
 
+  protected function getAllowedIncludes(): array
+  {
+    return [];
+  }
+
+  protected function getDefaultIncludes(): array
+  {
+    return [];
+  }
+
+  protected function getAvailableFilters(): array
+  {
+    return [];
+  }
+
   #[Route('', methods: ['GET'])]
   public function index(Request $request): JsonResponse
   {

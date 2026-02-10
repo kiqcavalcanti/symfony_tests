@@ -4,20 +4,24 @@ namespace App\Controller;
 
 use App\Application\Dto\Common\BasePaginateDto;
 use App\Application\Services\BaseService;
-use App\Application\Transformers\BaseTransformer;
 use App\Exceptions\UnprocessableEntityException;
+use App\Utils\CaseConverter;
+use League\Fractal\TransformerAbstract;
+use PhpCsFixer\Tokenizer\AbstractTransformer;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 use Symfony\Component\HttpKernel\Exception\HttpException;
+use League\Fractal\Manager;
+use League\Fractal\Resource\Collection;
 
 abstract class BaseController extends AbstractController
 {
   public function __construct(
-    protected ValidatorInterface $validator,
-    protected BaseService        $service,
-    protected BaseTransformer    $baseTransformer
+    protected ValidatorInterface  $validator,
+    protected BaseService         $service,
+    protected TransformerAbstract $baseTransformer
   )
   {
   }
@@ -25,7 +29,7 @@ abstract class BaseController extends AbstractController
 
   protected function baseCreate(Request $request, string $dtoClass): JsonResponse
   {
-    return $this->handleRequest(function() use ($request, $dtoClass) {
+    return $this->handleRequest(function () use ($request, $dtoClass) {
       $dto = $this->dtoFromRequest($request, $dtoClass);
       $entity = $this->service->create($dto);
 
@@ -35,7 +39,7 @@ abstract class BaseController extends AbstractController
 
   protected function baseUpdate(string $id, Request $request, string $dtoClass): JsonResponse
   {
-    return $this->handleRequest(function() use ($request, $dtoClass, $id) {
+    return $this->handleRequest(function () use ($request, $dtoClass, $id) {
       $dto = $this->dtoFromRequest($request, $dtoClass, $id);
       $entity = $this->service->update($dto);
 
@@ -68,40 +72,51 @@ abstract class BaseController extends AbstractController
     });
   }
 
-  protected function basePaginate(
-    Request $request,
-    string $paginateDtoClass
-  ): JsonResponse {
+
+  protected function basePaginate(Request $request, string $paginateDtoClass): JsonResponse
+  {
     return $this->handleRequest(function () use ($request, $paginateDtoClass) {
       /** @var BasePaginateDto $dto */
       $dto = new $paginateDtoClass();
 
-      $dto->page  = max(1, (int) $request->query->get('page', 1));
+      $dto->page = max(1, (int) $request->query->get('page', 1));
       $dto->limit = min(100, max(1, (int) $request->query->get('limit', 10)));
 
-      foreach ($request->query->all() as $key => $value) {
-        if (property_exists($dto, $key)) {
-          $dto->$key = $value;
-        }
-      }
+      $requestedIncludes = $this->resolveIncludes($request);
+
+      $includes = array_unique(array_merge(
+        $this->getDefaultIncludes(),
+        $requestedIncludes
+      ));
+
+      $dto->include = $includes;
+
+      $dto->filter = $this->resolveFilters($request);
 
       $this->validateDto($dto);
 
       $result = $this->service->paginate($dto);
 
+      $this->baseTransformer->setIncludes($includes);
+
+      $fractal = new Manager();
+
+      $resource = new Collection(
+        $result['data'],
+        $this->baseTransformer
+      );
+
       return new JsonResponse([
-        'data' => array_map(
-          fn ($entity) => $this->baseTransformer->transform($entity),
-          $result['data']
-        ),
+        'data' => $fractal->createData($resource)->toArray()['data'],
         'meta' => $result['meta'],
       ]);
     });
   }
 
+
   protected function baseInactivate(string $id, Request $request, string $dtoClass): JsonResponse
   {
-    return $this->handleRequest(function() use ($id, $request, $dtoClass) {
+    return $this->handleRequest(function () use ($id, $request, $dtoClass) {
       $dto = $this->dtoFromRequest($request, $dtoClass, $id);
       $entity = $this->service->inactivate($dto);
 
@@ -111,7 +126,7 @@ abstract class BaseController extends AbstractController
 
   protected function baseReactivate(string $id, Request $request, string $dtoClass): JsonResponse
   {
-    return $this->handleRequest(function() use ($id, $request, $dtoClass) {
+    return $this->handleRequest(function () use ($id, $request, $dtoClass) {
       $dto = $this->dtoFromRequest($request, $dtoClass, $id);
       $entity = $this->service->reactivate($dto);
 
@@ -148,7 +163,7 @@ abstract class BaseController extends AbstractController
     if (count($errors) > 0) {
       throw new UnprocessableEntityException([
         'errors' => array_map(
-          fn ($e) => [
+          fn($e) => [
             'field' => $e->getPropertyPath(),
             'message' => $e->getMessage(),
           ],
@@ -163,7 +178,7 @@ abstract class BaseController extends AbstractController
     try {
       return $callback();
     } catch (\Throwable $e) {
-       return $this->handleThrowable($e);
+      return $this->handleThrowable($e);
     }
   }
 
@@ -190,6 +205,59 @@ abstract class BaseController extends AbstractController
     }
 
     return new JsonResponse($payload, $status);
+  }
+
+
+  protected function resolveIncludes(Request $request): array
+  {
+    $raw = $request->query->get('include', '');
+
+    $requested = array_filter(
+      array_map('trim', explode(',', $raw))
+    );
+
+    $allowed = $this->getAllowedIncludes();
+
+    $requestedSnake = array_map([CaseConverter::class, 'toSnakeCase'], $requested);
+    $allowedSnake = array_map([CaseConverter::class, 'toSnakeCase'], $allowed);
+
+    $intersect = array_intersect($requestedSnake, $allowedSnake);
+
+    return array_values($intersect);
+  }
+
+  protected function resolveFilters(Request $request): array
+  {
+    $raw = $request->query->all();
+
+    $allowed = array_map([CaseConverter::class, 'toSnakeCase'], $this->getAvailableFilters());
+
+
+    $filters = [];
+    foreach ($raw as $key => $value) {
+      $keySnake = CaseConverter::toSnakeCase($key);
+
+      if (in_array($keySnake, $allowed, true)) {
+        $filters[$keySnake] = $value;
+      }
+    }
+
+    return $filters;
+  }
+
+  protected function getAllowedIncludes(): array
+  {
+    return [];
+  }
+
+  protected function getDefaultIncludes(): array
+  {
+    return [];
+  }
+
+  protected function getAvailableFilters(): array
+  {
+    return [];
   }
 
 }

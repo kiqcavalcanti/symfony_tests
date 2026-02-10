@@ -4,6 +4,7 @@ namespace App\Application\Transformers;
 
 use App\Entity\BaseEntity;
 use App\Entity\User;
+use League\Fractal\TransformerAbstract;
 
 class UserTransformer extends BaseTransformer
 {

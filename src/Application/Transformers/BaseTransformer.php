@@ -2,50 +2,21 @@
 
 namespace App\Application\Transformers;
 
-use App\Entity\BaseEntity;
-use ReflectionClass;
-use ReflectionProperty;
+use App\Utils\CaseConverter;
+use League\Fractal\TransformerAbstract;
 
-class BaseTransformer
+abstract class BaseTransformer extends TransformerAbstract
 {
-  /**
-   * @param BaseEntity|BaseEntity[] $data
-   * @return array
-   */
-  public function transform(BaseEntity|array $data): array
-  {
-    if (is_array($data)) {
-      return array_map(fn($item) => $this->transformEntity($item), $data);
-    }
+  public array $includes = [];
 
-    return $this->transformEntity($data);
+  public function setIncludes(array $includes): self
+  {
+    $this->includes = array_map([CaseConverter::class, 'toSnakeCase'], $includes);
+    return $this;
   }
 
-  /**
-   * Transforma uma única entidade
-   */
-  protected function transformEntity(BaseEntity $entity): array
+  protected function hasInclude(string $include): bool
   {
-    $calledClass = get_called_class();
-    if ($calledClass !== self::class &&
-      (new \ReflectionMethod($calledClass, 'transformEntity'))->getDeclaringClass()->getName() === $calledClass) {
-      return $calledClass::transformEntity($entity);
-    }
-
-    return $this->genericTransform($entity);
-  }
-
-  protected function genericTransform(BaseEntity $entity): array
-  {
-    $reflection = new ReflectionClass($entity);
-    $props = $reflection->getProperties(ReflectionProperty::IS_PRIVATE | ReflectionProperty::IS_PROTECTED | ReflectionProperty::IS_PUBLIC);
-
-    $data = [];
-    foreach ($props as $prop) {
-      $prop->setAccessible(true);
-      $data[$prop->getName()] = $prop->getValue($entity);
-    }
-
-    return $data;
+    return in_array(CaseConverter::toSnakeCase($include), $this->includes, true);
   }
 }

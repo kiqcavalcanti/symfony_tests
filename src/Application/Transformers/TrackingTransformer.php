@@ -2,20 +2,20 @@
 
 namespace App\Application\Transformers;
 
-use App\Application\Transformers\BaseTransformer;
+use League\Fractal\TransformerAbstract;
 use App\Entity\Tracking;
 use App\Entity\BaseEntity;
 
 class TrackingTransformer extends BaseTransformer
 {
   /**
-   * @param Tracking|array|BaseEntity $entity
+   * @param Tracking|BaseEntity $entity
    * @return array
    */
-  public function transform(Tracking|BaseEntity|array $entity): array
+  public function transform(Tracking|BaseEntity $entity): array
   {
     return [
-      'data' => $entity->toArray()
+      $entity->toArray()
     ];
   }
 }

@@ -9,6 +9,7 @@ use App\Exceptions\EntityNotFoundException;
 use App\Exceptions\UnprocessableEntityException;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\EntityRepository;
+use Doctrine\ORM\QueryBuilder;
 
 abstract class BaseService
 {
@@ -112,6 +113,9 @@ abstract class BaseService
 
     $qb = $this->repository->createQueryBuilder('e');
 
+    $this->applyFilters($qb, $dto->filter ?? []);
+    $this->applyIncludes($qb, $dto->include ?? []);
+
     $total = (clone $qb)
       ->select('COUNT(e.id)')
       ->getQuery()
@@ -122,6 +126,7 @@ abstract class BaseService
       ->setMaxResults($limit)
       ->getQuery()
       ->getResult();
+
 
     return [
       'data' => $data,
@@ -134,6 +139,15 @@ abstract class BaseService
     ];
   }
 
+  protected function applyIncludes(
+    QueryBuilder $qb,
+    array $includes
+  ): void {}
+
+  protected function applyFilters(
+    QueryBuilder $qb,
+    array $filters
+  ): void {}
 
   protected function findOrFail(string $id): BaseEntity
   {

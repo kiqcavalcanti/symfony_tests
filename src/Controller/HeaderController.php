@@ -25,6 +25,22 @@ class HeaderController extends BaseController
     parent::__construct($validator, $service, $transformer);
   }
 
+  protected function getAllowedIncludes(): array
+  {
+    return ['logo_tracking','search_tracking'];
+  }
+
+  protected function getDefaultIncludes(): array
+  {
+    return ['logo_tracking','search_tracking'];
+  }
+
+  protected function getAvailableFilters(): array
+  {
+    return ['logo_text'];
+  }
+
+
   #[Route('', methods: ['GET'])]
   public function index(Request $request): JsonResponse
   {

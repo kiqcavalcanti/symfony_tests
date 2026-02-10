@@ -2,7 +2,7 @@
 
 namespace App\Application\Transformers;
 
-use App\Application\Transformers\BaseTransformer;
+use League\Fractal\TransformerAbstract;
 use App\Entity\_Hat_;
 use App\Entity\BaseEntity;
 

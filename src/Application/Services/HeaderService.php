@@ -6,6 +6,7 @@ use App\Application\Services\BaseService;
 use App\Entity\Header;
 use App\Entity\BaseEntity;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\QueryBuilder;
 
 class HeaderService extends BaseService
 {
@@ -48,6 +49,33 @@ class HeaderService extends BaseService
   public function reactivate(mixed $dto): BaseEntity
   {
     return parent::baseReactivate($dto);
+  }
+
+  protected function applyIncludes(
+    QueryBuilder $qb,
+    array $includes
+  ): void {
+
+    if (in_array('logo_tracking', $includes, true)) {
+      $qb
+        ->leftJoin('e.tracking', 'logoTracking')
+        ->addSelect('logoTracking');
+    }
+
+    if (in_array('search_tracking', $includes, true)) {
+      $qb
+        ->leftJoin('e.searchTracking', 'searchTracking')
+        ->addSelect('searchTracking');
+    }
+  }
+
+  protected function applyFilters(QueryBuilder $qb, array $filters): void
+  {
+      if (isset($filters['logo_text'])) {
+        $qb
+          ->andWhere('e.logo_text LIKE :logoText')
+          ->setParameter('logoText', '%' . $filters['logo_text'] . '%');
+      }
   }
 
 }
